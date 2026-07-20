@@ -17,6 +17,7 @@ import (
 	"github.com/robouden/imagearc/internal/config"
 	"github.com/robouden/imagearc/internal/metadata"
 	"github.com/robouden/imagearc/internal/pipeline"
+	"github.com/robouden/imagearc/internal/store"
 	"github.com/robouden/imagearc/web"
 )
 
@@ -26,6 +27,7 @@ type streamEvent struct {
 	Status  string `json:"status"`
 	Caption string `json:"caption,omitempty"`
 	Error   string `json:"error,omitempty"`
+	Total   int    `json:"total,omitempty"`
 }
 
 // broadcaster fans out batch progress events to any connected SSE clients.
@@ -66,10 +68,17 @@ func (b *broadcaster) publish(ev streamEvent) {
 
 type server struct {
 	bcast *broadcaster
+	st    *store.Store
 }
 
 func newServer() *server {
-	return &server{bcast: newBroadcaster()}
+	s := &server{bcast: newBroadcaster()}
+	if st, err := store.Open(store.DefaultPath()); err == nil {
+		s.st = st
+	} else {
+		fmt.Fprintf(os.Stderr, "warning: library index unavailable: %v\n", err)
+	}
+	return s
 }
 
 func (s *server) routes(mux *http.ServeMux) {
@@ -84,6 +93,11 @@ func (s *server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/catalog", s.handleCatalog)
 	mux.HandleFunc("/api/browse", s.handleBrowse)
 	mux.HandleFunc("/api/models", s.handleModels)
+	mux.HandleFunc("/api/index", s.handleIndex)
+	mux.HandleFunc("/api/search", s.handleSearch)
+	mux.HandleFunc("/api/stats", s.handleStats)
+	mux.HandleFunc("/api/thumb", s.handleThumb)
+	mux.HandleFunc("/api/image", s.handleImage)
 }
 
 type browseResponse struct {
@@ -199,6 +213,9 @@ func (s *server) handleCaption(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		ctx := context.Background()
+		if files, err := pipeline.Walk(req.Folder, req.Recurse); err == nil {
+			s.bcast.publish(streamEvent{Status: "start", Total: len(files)})
+		}
 		process := func(ctx context.Context, path string) (string, error) {
 			res, err := cap.Caption(ctx, captioner.Request{ImagePath: path})
 			if err != nil {
@@ -208,10 +225,17 @@ func (s *server) handleCaption(w http.ResponseWriter, r *http.Request) {
 				if err := metadata.Write(path, metadata.Meta{Caption: res.Caption, Keywords: res.Keywords}); err != nil {
 					return "", err
 				}
+				if s.st != nil {
+					s.st.Upsert(store.Photo{Path: path, Caption: res.Caption, Keywords: strings.Join(res.Keywords, ", ")})
+				}
 			}
 			return res.Caption, nil
 		}
-		events, err := pipeline.Run(ctx, req.Folder, req.Recurse, cfg.Workers, process)
+		workers := cfg.Workers
+		if req.Provider == "ollama" && workers == 0 {
+			workers = 1 // one local GPU serves the vision model serially; avoid timeouts
+		}
+		events, err := pipeline.Run(ctx, req.Folder, req.Recurse, workers, process)
 		if err != nil {
 			s.bcast.publish(streamEvent{Status: "error", Error: err.Error()})
 			s.bcast.publish(streamEvent{Status: "complete"})

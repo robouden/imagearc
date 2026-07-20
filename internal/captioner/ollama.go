@@ -32,17 +32,18 @@ func NewOllamaProvider(host, model string) *OllamaProvider {
 	return &OllamaProvider{
 		Host:   host,
 		Model:  model,
-		Client: &http.Client{Timeout: 120 * time.Second},
+		Client: &http.Client{Timeout: 10 * time.Minute}, // first model load + inference can be slow
 	}
 }
 
 func (p *OllamaProvider) Name() string { return "ollama" }
 
 type ollamaGenerateRequest struct {
-	Model  string   `json:"model"`
-	Prompt string   `json:"prompt"`
-	Images []string `json:"images"`
-	Stream bool     `json:"stream"`
+	Model     string   `json:"model"`
+	Prompt    string   `json:"prompt"`
+	Images    []string `json:"images"`
+	Stream    bool     `json:"stream"`
+	KeepAlive string   `json:"keep_alive"` // keep model resident between batch images
 }
 
 type ollamaGenerateResponse struct {
@@ -67,10 +68,11 @@ func (p *OllamaProvider) Caption(ctx context.Context, r Request) (Result, error)
 	}
 
 	reqBody := ollamaGenerateRequest{
-		Model:  p.Model,
-		Prompt: prompt,
-		Images: []string{encoded},
-		Stream: false,
+		Model:     p.Model,
+		Prompt:    prompt,
+		Images:    []string{encoded},
+		Stream:    false,
+		KeepAlive: "15m",
 	}
 	buf, err := json.Marshal(reqBody)
 	if err != nil {
