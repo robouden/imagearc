@@ -64,6 +64,10 @@ CREATE TABLE IF NOT EXISTS photos(
   filename TEXT, caption TEXT, keywords TEXT, byline TEXT, location TEXT, date TEXT,
   mtime INTEGER, indexed_at INTEGER
 );
+CREATE TABLE IF NOT EXISTS sources(
+  path TEXT PRIMARY KEY,
+  recurse INTEGER
+);
 CREATE VIRTUAL TABLE IF NOT EXISTS photos_fts USING fts5(
   caption, keywords, byline, location, content='photos', content_rowid='id'
 );
@@ -102,6 +106,81 @@ ON CONFLICT(path) DO UPDATE SET
   mtime=excluded.mtime, indexed_at=excluded.indexed_at`,
 		p.Path, p.Filename, p.Caption, p.Keywords, p.Byline, p.Location, p.Date, mtime, time.Now().Unix())
 	return err
+}
+
+// Mtime returns the stored modification time for a path, and whether it exists.
+func (s *Store) Mtime(path string) (int64, bool) {
+	var mt int64
+	err := s.db.QueryRow("SELECT mtime FROM photos WHERE path = ?", path).Scan(&mt)
+	if err != nil {
+		return 0, false
+	}
+	return mt, true
+}
+
+// PathsUnder returns all indexed paths equal to root or beneath it.
+func (s *Store) PathsUnder(root string) ([]string, error) {
+	rows, err := s.db.Query("SELECT path FROM photos WHERE path = ? OR path LIKE ?", root, root+"/%")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// Delete removes a photo from the index by path.
+func (s *Store) Delete(path string) error {
+	_, err := s.db.Exec("DELETE FROM photos WHERE path = ?", path)
+	return err
+}
+
+// Source is a remembered indexed folder.
+type Source struct {
+	Path    string `json:"path"`
+	Recurse bool   `json:"recurse"`
+}
+
+// AddSource records (or updates) a folder as an index source.
+func (s *Store) AddSource(path string, recurse bool) error {
+	_, err := s.db.Exec(
+		"INSERT INTO sources(path, recurse) VALUES(?, ?) ON CONFLICT(path) DO UPDATE SET recurse=excluded.recurse",
+		path, boolToInt(recurse))
+	return err
+}
+
+// Sources returns all remembered index sources.
+func (s *Store) Sources() ([]Source, error) {
+	rows, err := s.db.Query("SELECT path, recurse FROM sources ORDER BY path")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Source
+	for rows.Next() {
+		var src Source
+		var rec int
+		if err := rows.Scan(&src.Path, &rec); err != nil {
+			return nil, err
+		}
+		src.Recurse = rec != 0
+		out = append(out, src)
+	}
+	return out, rows.Err()
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // Query holds search parameters.

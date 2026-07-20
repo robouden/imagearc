@@ -349,6 +349,35 @@
     };
   });
 
+  // Refresh: re-scan all indexed folders
+  document.getElementById("lib-refresh").addEventListener("click", async () => {
+    const bar = document.getElementById("lib-progress");
+    const barFill = document.getElementById("lib-progress-bar");
+    const barLabel = document.getElementById("lib-progress-label");
+    const barPct = document.getElementById("lib-progress-pct");
+    let total = 0, done = 0;
+    const paint = () => {
+      const pct = total ? Math.round((done / total) * 100) : 0;
+      barFill.style.width = pct + "%";
+      barLabel.textContent = done + " / " + total;
+      barPct.textContent = pct + "%";
+    };
+    bar.hidden = false; paint();
+    try {
+      const res = await fetch("/api/refresh", { method: "POST" });
+      if (!res.ok) { libCount.textContent = "refresh error: " + (await res.text()); return; }
+    } catch (e) { libCount.textContent = "refresh error: " + e; return; }
+    const es = new EventSource("/api/stream");
+    es.onmessage = (ev) => {
+      try {
+        const evt = JSON.parse(ev.data);
+        if (evt.status === "start") { total = evt.total || 0; done = 0; paint(); return; }
+        if (evt.status === "done" || evt.status === "error" || evt.status === "skipped") { done++; paint(); }
+        if (evt.status === "complete") { es.close(); libSearch(); }
+      } catch (e) {}
+    };
+  });
+
   // --- Dashboard ---
   function bars(el, items) {
     el.innerHTML = "";

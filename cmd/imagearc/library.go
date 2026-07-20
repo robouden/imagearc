@@ -48,28 +48,122 @@ func (s *server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusFailedDependency)
 		return
 	}
-	files, err := pipeline.Walk(req.Folder, req.Recurse)
-	if err != nil {
+	if _, err := pipeline.Walk(req.Folder, req.Recurse); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	go s.reindex(req.Folder, req.Recurse, func(ev streamEvent) { s.bcast.publish(ev) })
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// handleRefresh re-indexes every remembered source folder, streaming progress.
+func (s *server) handleRefresh(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.st == nil {
+		http.Error(w, "library index unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if err := metadata.CheckExifTool(); err != nil {
+		http.Error(w, err.Error(), http.StatusFailedDependency)
+		return
+	}
+	srcs, err := s.st.Sources()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	go func() {
-		s.bcast.publish(streamEvent{Status: "start", Total: len(files)})
-		for _, f := range files {
-			m, err := metadata.Read(f)
-			if err != nil {
-				s.bcast.publish(streamEvent{Path: f, Status: "error", Error: err.Error()})
-				continue
-			}
-			s.st.Upsert(store.Photo{
-				Path: f, Caption: m.Caption, Keywords: strings.Join(m.Keywords, ", "),
-				Byline: m.Byline, Location: m.Location, Date: m.Date,
-			})
-			s.bcast.publish(streamEvent{Path: f, Status: "done", Caption: m.Caption})
+		for _, src := range srcs {
+			s.reindex(src.Path, src.Recurse, func(ev streamEvent) { s.bcast.publish(ev) })
 		}
-		s.bcast.publish(streamEvent{Status: "complete"})
+		if len(srcs) == 0 {
+			s.bcast.publish(streamEvent{Status: "complete"})
+		}
 	}()
 	w.WriteHeader(http.StatusAccepted)
+}
+
+// reindex incrementally indexes a folder: unchanged files (same mtime) are
+// skipped, changed/new files are re-read, entries for deleted files are pruned,
+// and the folder is recorded as a source. emit may be nil for silent runs.
+func (s *server) reindex(folder string, recurse bool, emit func(streamEvent)) {
+	if s.st == nil {
+		return
+	}
+	send := func(ev streamEvent) {
+		if emit != nil {
+			emit(ev)
+		}
+	}
+	files, err := pipeline.Walk(folder, recurse)
+	if err != nil {
+		send(streamEvent{Status: "error", Error: err.Error()})
+		send(streamEvent{Status: "complete"})
+		return
+	}
+	send(streamEvent{Status: "start", Total: len(files)})
+	present := make(map[string]bool, len(files))
+	for _, f := range files {
+		present[f] = true
+		if fi, err := os.Stat(f); err == nil {
+			if mt, ok := s.st.Mtime(f); ok && mt == fi.ModTime().Unix() {
+				send(streamEvent{Path: f, Status: "skipped"})
+				continue
+			}
+		}
+		m, err := metadata.Read(f)
+		if err != nil {
+			send(streamEvent{Path: f, Status: "error", Error: err.Error()})
+			continue
+		}
+		s.st.Upsert(store.Photo{
+			Path: f, Caption: m.Caption, Keywords: strings.Join(m.Keywords, ", "),
+			Byline: m.Byline, Location: m.Location, Date: m.Date,
+		})
+		send(streamEvent{Path: f, Status: "done", Caption: m.Caption})
+	}
+	if known, err := s.st.PathsUnder(folder); err == nil {
+		for _, p := range known {
+			if !present[p] {
+				s.st.Delete(p)
+			}
+		}
+	}
+	s.st.AddSource(folder, recurse)
+	send(streamEvent{Status: "complete"})
+}
+
+// indexOne reads and upserts a single image (used by the live watcher).
+func (s *server) indexOne(path string) {
+	if s.st == nil || !pipeline.IsImage(path) {
+		return
+	}
+	m, err := metadata.Read(path)
+	if err != nil {
+		return
+	}
+	s.st.Upsert(store.Photo{
+		Path: path, Caption: m.Caption, Keywords: strings.Join(m.Keywords, ", "),
+		Byline: m.Byline, Location: m.Location, Date: m.Date,
+	})
+}
+
+// rescanSources incrementally re-indexes every remembered source (silent).
+// Skipped when exiftool is unavailable.
+func (s *server) rescanSources() {
+	if s.st == nil || metadata.CheckExifTool() != nil {
+		return
+	}
+	srcs, err := s.st.Sources()
+	if err != nil {
+		return
+	}
+	for _, src := range srcs {
+		s.reindex(src.Path, src.Recurse, nil)
+	}
 }
 
 // handleSearch runs a full-text + filter query against the index.

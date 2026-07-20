@@ -20,6 +20,9 @@ func newServeCmd() *cobra.Command {
 			mux := http.NewServeMux()
 			s.routes(mux)
 
+			go s.rescanSources() // catch changes made while offline
+			s.startWatching()    // live-index future changes
+
 			url := "http://" + addr
 			fmt.Printf("ImageArc serving at %s\n", url)
 			go openBrowser(url)
