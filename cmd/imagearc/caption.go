@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -42,6 +43,9 @@ func newCaptionCmd() *cobra.Command {
 			}
 			if workers == 0 {
 				workers = cfg.Workers
+			}
+			if provider == "ollama" && workers == 0 {
+				workers = 1 // one local GPU serves the vision model serially; avoid timeouts
 			}
 
 			if !dryRun {
@@ -84,22 +88,41 @@ func newCaptionCmd() *cobra.Command {
 				return m.Caption, nil
 			}
 
+			files, err := pipeline.Walk(root, recurse)
+			if err != nil {
+				return err
+			}
+			total := len(files)
+			width := len(strconv.Itoa(total))
+			fmt.Printf("found %d image(s)\n", total)
+
 			events, err := pipeline.Run(ctx, root, recurse, workers, process)
 			if err != nil {
 				return err
 			}
-			var errs int
+			var errs, done int
+			// prog returns a "[  cur/total  42%]" progress prefix.
+			prog := func(cur int) string {
+				pct := 0
+				if total > 0 {
+					pct = cur * 100 / total
+				}
+				return fmt.Sprintf("[%*d/%d %3d%%]", width, cur, total, pct)
+			}
 			for ev := range events {
 				switch ev.Status {
 				case pipeline.StatusStarted:
-					fmt.Printf("[started] %s\n", ev.Path)
+					fmt.Printf("%s started %s\n", prog(done+1), ev.Path)
 				case pipeline.StatusDone:
-					fmt.Printf("[done]    %s -> %s\n", ev.Path, ev.Caption)
+					done++
+					fmt.Printf("%s done    %s -> %s\n", prog(done), ev.Path, ev.Caption)
 				case pipeline.StatusError:
 					errs++
-					fmt.Printf("[error]   %s: %v\n", ev.Path, ev.Err)
+					done++
+					fmt.Printf("%s error   %s: %v\n", prog(done), ev.Path, ev.Err)
 				case pipeline.StatusSkipped:
-					fmt.Printf("[skipped] %s\n", ev.Path)
+					done++
+					fmt.Printf("%s skipped %s\n", prog(done), ev.Path)
 				}
 			}
 			if errs > 0 {
