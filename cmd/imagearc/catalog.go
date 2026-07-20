@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/robouden/fotoarch/internal/catalog"
-	"github.com/robouden/fotoarch/internal/metadata"
-	"github.com/robouden/fotoarch/internal/pipeline"
+	"github.com/robouden/imagearc/internal/catalog"
+	"github.com/robouden/imagearc/internal/metadata"
+	"github.com/robouden/imagearc/internal/pipeline"
 )
 
 func newCatalogCmd() *cobra.Command {

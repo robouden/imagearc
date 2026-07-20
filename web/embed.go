@@ -1,4 +1,4 @@
-// Package web embeds the FotoArch dark-theme web UI assets.
+// Package web embeds the ImageArc dark-theme web UI assets.
 package web
 
 import "embed"

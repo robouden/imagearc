@@ -1,4 +1,4 @@
-module github.com/robouden/fotoarch
+module github.com/robouden/imagearc
 
 go 1.25.0
 

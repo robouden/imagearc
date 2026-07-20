@@ -10,12 +10,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/robouden/fotoarch/internal/captioner"
-	"github.com/robouden/fotoarch/internal/catalog"
-	"github.com/robouden/fotoarch/internal/config"
-	"github.com/robouden/fotoarch/internal/metadata"
-	"github.com/robouden/fotoarch/internal/pipeline"
-	"github.com/robouden/fotoarch/web"
+	"github.com/robouden/imagearc/internal/captioner"
+	"github.com/robouden/imagearc/internal/catalog"
+	"github.com/robouden/imagearc/internal/config"
+	"github.com/robouden/imagearc/internal/metadata"
+	"github.com/robouden/imagearc/internal/pipeline"
+	"github.com/robouden/imagearc/web"
 )
 
 // streamEvent is the JSON shape sent over /api/stream (SSE).

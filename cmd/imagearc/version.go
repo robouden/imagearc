@@ -9,9 +9,9 @@ import (
 func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
-		Short: "Print the FotoArch version",
+		Short: "Print the ImageArc version",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Printf("fotoarch %s\n", version)
+			fmt.Printf("imagearc %s\n", version)
 			return nil
 		},
 	}

@@ -1,4 +1,4 @@
-// Package config handles FotoArch's persistent configuration file and API keys from env.
+// Package config handles ImageArc's persistent configuration file and API keys from env.
 package config
 
 import (
@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 )
 
-// Config is the persisted user configuration (~/.config/fotoarch/config.json).
+// Config is the persisted user configuration (~/.config/imagearc/config.json).
 type Config struct {
 	DefaultProvider string `json:"defaultProvider"`
 	DefaultModel    string `json:"defaultModel"`
@@ -25,7 +25,7 @@ func Path() (string, error) {
 		}
 		dir = filepath.Join(home, ".config")
 	}
-	return filepath.Join(dir, "fotoarch", "config.json"), nil
+	return filepath.Join(dir, "imagearc", "config.json"), nil
 }
 
 // Load reads the config file, returning sane defaults if it doesn't exist.

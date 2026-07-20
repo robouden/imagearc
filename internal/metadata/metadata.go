@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-// Meta holds the metadata fields FotoArch manages.
+// Meta holds the metadata fields ImageArc manages.
 type Meta struct {
 	Caption  string
 	Keywords []string

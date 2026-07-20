@@ -1,9 +1,9 @@
-# FotoArch
+# ImageArc
 
 Open-source, cross-platform (Linux/Windows/macOS) AI photo captioning and
 IPTC/XMP metadata tool for photographers. Pure Go, no CGO, single static binary.
 
-FotoArch never rewrites your image pixels. It calls out to
+ImageArc never rewrites your image pixels. It calls out to
 [ExifTool](https://exiftool.org) to write standard IPTC/XMP metadata: in-file
 for JPEG/TIFF, and Lightroom-style `.xmp` sidecars for RAW (CR2/CR3/NEF/ARW/DNG/...).
 
@@ -39,15 +39,15 @@ Requirements:
 ### Build
 
 ```
-go build -o fotoarch ./cmd/fotoarch
+go build -o imagearc ./cmd/imagearc
 ```
 
 ### Cross-compile
 
 ```
-GOOS=linux   GOARCH=amd64 go build -o dist/fotoarch-linux-amd64     ./cmd/fotoarch
-GOOS=windows GOARCH=amd64 go build -o dist/fotoarch-windows-amd64.exe ./cmd/fotoarch
-GOOS=darwin  GOARCH=arm64 go build -o dist/fotoarch-macos-arm64     ./cmd/fotoarch
+GOOS=linux   GOARCH=amd64 go build -o dist/imagearc-linux-amd64     ./cmd/imagearc
+GOOS=windows GOARCH=amd64 go build -o dist/imagearc-windows-amd64.exe ./cmd/imagearc
+GOOS=darwin  GOARCH=arm64 go build -o dist/imagearc-macos-arm64     ./cmd/imagearc
 ```
 
 ## Usage
@@ -55,19 +55,19 @@ GOOS=darwin  GOARCH=arm64 go build -o dist/fotoarch-macos-arm64     ./cmd/fotoar
 ### Caption a folder
 
 ```
-fotoarch caption ./photos --provider ollama --model llava --recurse
+imagearc caption ./photos --provider ollama --model llava --recurse
 ```
 
 Dry run (caption only, no metadata written):
 
 ```
-fotoarch caption ./photos --dry-run
+imagearc caption ./photos --dry-run
 ```
 
 With a client template and a custom worker count:
 
 ```
-fotoarch caption ./photos --recurse --template client.json --workers 4
+imagearc caption ./photos --recurse --template client.json --workers 4
 ```
 
 `client.json`:
@@ -85,7 +85,7 @@ fotoarch caption ./photos --recurse --template client.json --workers 4
 ### Build a catalog
 
 ```
-fotoarch catalog ./photos --recurse -o catalog.csv
+imagearc catalog ./photos --recurse -o catalog.csv
 ```
 
 `--no-ai` is the default and only mode today: catalog reads existing IPTC/XMP
@@ -94,7 +94,7 @@ via ExifTool and writes CSV — no network, no AI calls.
 ### Serve the web UI
 
 ```
-fotoarch serve --addr localhost:8733
+imagearc serve --addr localhost:8733
 ```
 
 Opens your browser to a dark-themed UI for batch captioning (with a live
@@ -103,12 +103,12 @@ activity log), a metadata editor, and catalog building.
 ### Version
 
 ```
-fotoarch version
+imagearc version
 ```
 
 ## How metadata is written
 
-FotoArch maps fields to both IPTC and XMP so readers using either standard pick
+ImageArc maps fields to both IPTC and XMP so readers using either standard pick
 them up:
 
 | Field    | IPTC             | XMP                  |
@@ -136,8 +136,8 @@ but metadata changes, and the pixel data is untouched by ExifTool tag writes).
 
 Mirrored on both forges — clone from whichever you prefer:
 
-- Codeberg: https://codeberg.org/YR-Design/fotoarch
-- GitHub: https://github.com/robouden/fotoarch
+- Codeberg: https://codeberg.org/YR-Design/imagearc
+- GitHub: https://github.com/robouden/imagearc
 
 ## License
 

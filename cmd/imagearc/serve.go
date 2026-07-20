@@ -14,14 +14,14 @@ func newServeCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "serve",
-		Short: "Serve the FotoArch web UI",
+		Short: "Serve the ImageArc web UI",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s := newServer()
 			mux := http.NewServeMux()
 			s.routes(mux)
 
 			url := "http://" + addr
-			fmt.Printf("FotoArch serving at %s\n", url)
+			fmt.Printf("ImageArc serving at %s\n", url)
 			go openBrowser(url)
 
 			return http.ListenAndServe(addr, mux)
