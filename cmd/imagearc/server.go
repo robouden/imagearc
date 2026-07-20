@@ -215,6 +215,9 @@ func (s *server) handleCaption(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		ctx := context.Background()
+		if s.st != nil {
+			s.st.AddSource(req.Folder, req.Recurse) // remember for auto-refresh/watch
+		}
 		if files, err := pipeline.Walk(req.Folder, req.Recurse); err == nil {
 			s.bcast.publish(streamEvent{Status: "start", Total: len(files)})
 		}
@@ -227,9 +230,9 @@ func (s *server) handleCaption(w http.ResponseWriter, r *http.Request) {
 				if err := metadata.Write(path, metadata.Meta{Caption: res.Caption, Keywords: res.Keywords}); err != nil {
 					return "", err
 				}
-				if s.st != nil {
-					s.st.Upsert(store.Photo{Path: path, Caption: res.Caption, Keywords: strings.Join(res.Keywords, ", ")})
-				}
+				// Re-read the file so the index gets the full record (caption +
+				// existing EXIF date/GPS), not just the caption we just wrote.
+				s.indexOne(path)
 			}
 			return res.Caption, nil
 		}
