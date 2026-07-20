@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ImageArc</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -83,8 +85,15 @@
         <div class="progress-track"><div id="lib-progress-bar" class="progress-bar"></div></div>
       </div>
     </details>
-    <p id="lib-count" class="status"></p>
+    <div class="lib-controls">
+      <p id="lib-count" class="status"></p>
+      <div class="seg-group">
+        <button id="view-grid" class="seg is-active">Grid</button>
+        <button id="view-map" class="seg">Map</button>
+      </div>
+    </div>
     <div id="lib-grid" class="gallery"></div>
+    <div id="lib-map" class="lib-map" hidden></div>
   </section>
 
   <!-- Dashboard -->
@@ -93,11 +102,13 @@
       <div class="stat-tiles">
         <div class="tile"><span id="dash-total" class="tile-num">0</span><span class="tile-lbl">Photos indexed</span></div>
         <div class="tile"><span id="dash-captioned" class="tile-num">0</span><span class="tile-lbl">Captioned</span></div>
+        <div class="tile"><span id="dash-geotagged" class="tile-num">0</span><span class="tile-lbl">Geotagged</span></div>
       </div>
       <button id="dash-refresh" class="btn ghost">Refresh</button>
     </div>
     <div class="dash-cols">
       <div class="dash-card"><h3>Top keywords</h3><ul id="dash-keywords" class="bars"></ul></div>
+      <div class="dash-card"><h3>By year</h3><ul id="dash-years" class="bars"></ul></div>
       <div class="dash-card"><h3>Locations</h3><ul id="dash-locations" class="bars"></ul></div>
       <div class="dash-card"><h3>Bylines</h3><ul id="dash-bylines" class="bars"></ul></div>
     </div>
@@ -158,6 +169,7 @@
     <img id="lightbox-img" alt="">
     <div class="lightbox-info">
       <p id="lightbox-caption"></p>
+      <p id="lightbox-meta" class="lightbox-kw"></p>
       <p id="lightbox-keywords" class="lightbox-kw"></p>
       <div class="lightbox-actions">
         <button id="lightbox-edit" class="btn ghost">Edit metadata</button>

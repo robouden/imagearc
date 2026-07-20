@@ -249,6 +249,28 @@ textarea { resize: vertical; }
 }
 .empty-note { color: var(--dim); font-size: 0.88rem; }
 
+.lib-controls { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.seg-group { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--dim);
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.35rem 0.9rem;
+  cursor: pointer;
+}
+.seg.is-active { background: var(--accent); color: var(--accent-ink); }
+
+.lib-map { height: 60vh; min-height: 380px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.lib-map[hidden] { display: none; }
+.map-pop { cursor: pointer; width: 160px; }
+.map-pop img { width: 100%; border-radius: 4px; display: block; margin-bottom: 0.35rem; }
+.map-pop div { font-size: 0.78rem; line-height: 1.3; }
+.map-link { color: var(--accent); text-decoration: none; }
+.leaflet-popup-content { margin: 0.6rem 0.7rem; }
+
 /* Lightbox */
 .lightbox-box {
   background: var(--surface);

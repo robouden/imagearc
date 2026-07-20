@@ -96,6 +96,7 @@ func (s *server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/index", s.handleIndex)
 	mux.HandleFunc("/api/refresh", s.handleRefresh)
 	mux.HandleFunc("/api/search", s.handleSearch)
+	mux.HandleFunc("/api/geo", s.handleGeo)
 	mux.HandleFunc("/api/stats", s.handleStats)
 	mux.HandleFunc("/api/thumb", s.handleThumb)
 	mux.HandleFunc("/api/image", s.handleImage)

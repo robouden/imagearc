@@ -15,14 +15,21 @@ import (
 
 // Photo is one indexed image.
 type Photo struct {
-	Path     string `json:"path"`
-	Filename string `json:"filename"`
-	Caption  string `json:"caption"`
-	Keywords string `json:"keywords"` // comma-separated
-	Byline   string `json:"byline"`
-	Location string `json:"location"`
-	Date     string `json:"date"`
+	Path     string   `json:"path"`
+	Filename string   `json:"filename"`
+	Caption  string   `json:"caption"`
+	Keywords string   `json:"keywords"` // comma-separated
+	Byline   string   `json:"byline"`
+	Location string   `json:"location"`
+	Date     string   `json:"date"`
+	Lat      *float64 `json:"lat,omitempty"`
+	Lon      *float64 `json:"lon,omitempty"`
 }
+
+// ReaderVersion is bumped whenever metadata extraction changes, so existing
+// rows are re-read on the next scan even if their mtime is unchanged.
+// v2: added EXIF DateTimeOriginal + GPS lat/lon.
+const ReaderVersion = 2
 
 // Store wraps the SQLite database.
 type Store struct{ db *sql.DB }
@@ -85,7 +92,14 @@ CREATE TRIGGER IF NOT EXISTS photos_au AFTER UPDATE ON photos BEGIN
   INSERT INTO photos_fts(rowid, caption, keywords, byline, location)
   VALUES (new.id, new.caption, new.keywords, new.byline, new.location);
 END;`)
-	return err
+	if err != nil {
+		return err
+	}
+	// Add columns to pre-existing databases; ignore "duplicate column" errors.
+	s.db.Exec("ALTER TABLE photos ADD COLUMN lat REAL")
+	s.db.Exec("ALTER TABLE photos ADD COLUMN lon REAL")
+	s.db.Exec("ALTER TABLE photos ADD COLUMN reader_version INTEGER DEFAULT 0")
+	return nil
 }
 
 // Upsert inserts or updates a photo by path.
@@ -98,24 +112,28 @@ func (s *Store) Upsert(p Photo) error {
 		p.Filename = filepath.Base(p.Path)
 	}
 	_, err := s.db.Exec(`
-INSERT INTO photos(path, filename, caption, keywords, byline, location, date, mtime, indexed_at)
-VALUES(?,?,?,?,?,?,?,?,?)
+INSERT INTO photos(path, filename, caption, keywords, byline, location, date, lat, lon, mtime, indexed_at, reader_version)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(path) DO UPDATE SET
   filename=excluded.filename, caption=excluded.caption, keywords=excluded.keywords,
   byline=excluded.byline, location=excluded.location, date=excluded.date,
-  mtime=excluded.mtime, indexed_at=excluded.indexed_at`,
-		p.Path, p.Filename, p.Caption, p.Keywords, p.Byline, p.Location, p.Date, mtime, time.Now().Unix())
+  lat=excluded.lat, lon=excluded.lon, mtime=excluded.mtime, indexed_at=excluded.indexed_at,
+  reader_version=excluded.reader_version`,
+		p.Path, p.Filename, p.Caption, p.Keywords, p.Byline, p.Location, p.Date,
+		p.Lat, p.Lon, mtime, time.Now().Unix(), ReaderVersion)
 	return err
 }
 
-// Mtime returns the stored modification time for a path, and whether it exists.
-func (s *Store) Mtime(path string) (int64, bool) {
+// IsFresh reports whether path is already indexed with the given mtime AND the
+// current ReaderVersion, i.e. it can be skipped during an incremental scan.
+func (s *Store) IsFresh(path string, mtime int64) bool {
 	var mt int64
-	err := s.db.QueryRow("SELECT mtime FROM photos WHERE path = ?", path).Scan(&mt)
+	var ver int
+	err := s.db.QueryRow("SELECT mtime, reader_version FROM photos WHERE path = ?", path).Scan(&mt, &ver)
 	if err != nil {
-		return 0, false
+		return false
 	}
-	return mt, true
+	return mt == mtime && ver == ReaderVersion
 }
 
 // PathsUnder returns all indexed paths equal to root or beneath it.
@@ -240,22 +258,50 @@ func (s *Store) Search(q Query) ([]Photo, int, error) {
 		limit = 100
 	}
 	rows, err := s.db.Query(
-		"SELECT p.path, p.filename, p.caption, p.keywords, p.byline, p.location, p.date FROM photos p "+
+		"SELECT p.path, p.filename, p.caption, p.keywords, p.byline, p.location, p.date, p.lat, p.lon FROM photos p "+
 			clause+" ORDER BY p.date DESC, p.filename ASC LIMIT ? OFFSET ?",
 		append(args, limit, q.Offset)...)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer rows.Close()
+	out, err := scanPhotos(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	return out, total, nil
+}
+
+// Geo returns every photo that has GPS coordinates, for the map view.
+func (s *Store) Geo() ([]Photo, error) {
+	rows, err := s.db.Query(
+		"SELECT path, filename, caption, keywords, byline, location, date, lat, lon " +
+			"FROM photos WHERE lat IS NOT NULL AND lon IS NOT NULL")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanPhotos(rows)
+}
+
+func scanPhotos(rows *sql.Rows) ([]Photo, error) {
 	var out []Photo
 	for rows.Next() {
 		var p Photo
-		if err := rows.Scan(&p.Path, &p.Filename, &p.Caption, &p.Keywords, &p.Byline, &p.Location, &p.Date); err != nil {
-			return nil, 0, err
+		var lat, lon sql.NullFloat64
+		if err := rows.Scan(&p.Path, &p.Filename, &p.Caption, &p.Keywords,
+			&p.Byline, &p.Location, &p.Date, &lat, &lon); err != nil {
+			return nil, err
+		}
+		if lat.Valid {
+			p.Lat = &lat.Float64
+		}
+		if lon.Valid {
+			p.Lon = &lon.Float64
 		}
 		out = append(out, p)
 	}
-	return out, total, rows.Err()
+	return out, rows.Err()
 }
 
 // KV is a label/count pair for dashboard aggregates.
@@ -268,20 +314,24 @@ type KV struct {
 type Stats struct {
 	Total       int  `json:"total"`
 	Captioned   int  `json:"captioned"`
+	Geotagged   int  `json:"geotagged"`
 	TopKeywords []KV `json:"topKeywords"`
 	Locations   []KV `json:"locations"`
 	Bylines     []KV `json:"bylines"`
+	Years       []KV `json:"years"`
 }
 
 // Stats computes dashboard aggregates. Keyword splitting is done in Go.
 func (s *Store) Stats() (Stats, error) {
 	var st Stats
-	if err := s.db.QueryRow("SELECT COUNT(*), COUNT(NULLIF(TRIM(caption),'')) FROM photos").
-		Scan(&st.Total, &st.Captioned); err != nil {
+	if err := s.db.QueryRow(
+		"SELECT COUNT(*), COUNT(NULLIF(TRIM(caption),'')), COUNT(lat) FROM photos").
+		Scan(&st.Total, &st.Captioned, &st.Geotagged); err != nil {
 		return st, err
 	}
 	st.Locations, _ = s.groupCount("location")
 	st.Bylines, _ = s.groupCount("byline")
+	st.Years, _ = s.yearCounts()
 
 	rows, err := s.db.Query("SELECT keywords FROM photos WHERE TRIM(keywords) <> ''")
 	if err != nil {
@@ -303,6 +353,26 @@ func (s *Store) Stats() (Stats, error) {
 	}
 	st.TopKeywords = topN(counts, 20)
 	return st, nil
+}
+
+// yearCounts groups photos by the year prefix of their date, newest first.
+func (s *Store) yearCounts() ([]KV, error) {
+	rows, err := s.db.Query(
+		"SELECT substr(date,1,4) y, COUNT(*) c FROM photos WHERE length(date) >= 4 " +
+			"GROUP BY y ORDER BY y DESC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []KV
+	for rows.Next() {
+		var kv KV
+		if err := rows.Scan(&kv.Label, &kv.Count); err != nil {
+			return nil, err
+		}
+		out = append(out, kv)
+	}
+	return out, rows.Err()
 }
 
 func (s *Store) groupCount(col string) ([]KV, error) {

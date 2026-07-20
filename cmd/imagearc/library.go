@@ -109,7 +109,7 @@ func (s *server) reindex(folder string, recurse bool, emit func(streamEvent)) {
 	for _, f := range files {
 		present[f] = true
 		if fi, err := os.Stat(f); err == nil {
-			if mt, ok := s.st.Mtime(f); ok && mt == fi.ModTime().Unix() {
+			if s.st.IsFresh(f, fi.ModTime().Unix()) {
 				send(streamEvent{Path: f, Status: "skipped"})
 				continue
 			}
@@ -121,7 +121,7 @@ func (s *server) reindex(folder string, recurse bool, emit func(streamEvent)) {
 		}
 		s.st.Upsert(store.Photo{
 			Path: f, Caption: m.Caption, Keywords: strings.Join(m.Keywords, ", "),
-			Byline: m.Byline, Location: m.Location, Date: m.Date,
+			Byline: m.Byline, Location: m.Location, Date: m.Date, Lat: m.Lat, Lon: m.Lon,
 		})
 		send(streamEvent{Path: f, Status: "done", Caption: m.Caption})
 	}
@@ -147,7 +147,7 @@ func (s *server) indexOne(path string) {
 	}
 	s.st.Upsert(store.Photo{
 		Path: path, Caption: m.Caption, Keywords: strings.Join(m.Keywords, ", "),
-		Byline: m.Byline, Location: m.Location, Date: m.Date,
+		Byline: m.Byline, Location: m.Location, Date: m.Date, Lat: m.Lat, Lon: m.Lon,
 	})
 }
 
@@ -188,6 +188,23 @@ func (s *server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		photos = []store.Photo{}
 	}
 	json.NewEncoder(w).Encode(map[string]any{"photos": photos, "total": total})
+}
+
+// handleGeo returns all geotagged photos for the map view.
+func (s *server) handleGeo(w http.ResponseWriter, r *http.Request) {
+	if s.st == nil {
+		http.Error(w, "library index unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	photos, err := s.st.Geo()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if photos == nil {
+		photos = []store.Photo{}
+	}
+	json.NewEncoder(w).Encode(map[string]any{"photos": photos})
 }
 
 // handleStats returns dashboard aggregates.

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -20,6 +21,8 @@ type Meta struct {
 	Location string
 	Headline string
 	Date     string
+	Lat      *float64 // GPS latitude (decimal), nil if absent
+	Lon      *float64 // GPS longitude (decimal), nil if absent
 	Raw      map[string]any // extra/raw exiftool fields, populated on Read
 }
 
@@ -50,7 +53,9 @@ func CheckExifTool() error {
 // Read runs exiftool -j on path and parses IPTC/XMP fields into a Meta.
 func Read(path string) (Meta, error) {
 	var m Meta
-	cmd := exec.Command("exiftool", "-j", "-IPTC:All", "-XMP:All", path)
+	cmd := exec.Command("exiftool", "-j", "-n",
+		"-DateTimeOriginal", "-Composite:GPSLatitude", "-Composite:GPSLongitude",
+		"-IPTC:All", "-XMP:All", path)
 	var out, stderr bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
@@ -71,8 +76,37 @@ func Read(path string) (Meta, error) {
 	m.Byline = firstString(raw, "By-line", "Creator")
 	m.Location = firstString(raw, "Sub-location", "Location")
 	m.Headline = firstString(raw, "Headline")
-	m.Date = firstString(raw, "DateCreated", "CreateDate")
+	m.Date = normalizeDate(firstString(raw, "DateTimeOriginal", "DateCreated", "CreateDate"))
+	if lat, ok := firstFloat(raw, "GPSLatitude"); ok {
+		m.Lat = &lat
+	}
+	if lon, ok := firstFloat(raw, "GPSLongitude"); ok {
+		m.Lon = &lon
+	}
 	return m, nil
+}
+
+// firstFloat returns the first key parseable as a float64.
+func firstFloat(m map[string]any, keys ...string) (float64, bool) {
+	switch v := firstVal(m, keys...).(type) {
+	case float64:
+		return v, true
+	case string:
+		if f, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil {
+			return f, true
+		}
+	}
+	return 0, false
+}
+
+// normalizeDate converts exiftool's "YYYY:MM:DD HH:MM:SS" to ISO "YYYY-MM-DD HH:MM:SS"
+// (date portion), which sorts lexically and is friendlier to display.
+func normalizeDate(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) >= 10 && s[4] == ':' && s[7] == ':' {
+		return s[0:4] + "-" + s[5:7] + "-" + s[8:]
+	}
+	return s
 }
 
 func firstVal(m map[string]any, keys ...string) any {

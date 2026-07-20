@@ -293,6 +293,21 @@
     document.getElementById("lightbox-img").src = "/api/image?path=" + encodeURIComponent(p.path);
     document.getElementById("lightbox-caption").textContent = p.caption || p.filename;
     document.getElementById("lightbox-keywords").textContent = p.keywords || "";
+    const meta = document.getElementById("lightbox-meta");
+    meta.innerHTML = "";
+    const bits = [];
+    if (p.date) bits.push(p.date);
+    if (p.lat != null && p.lon != null) bits.push(p.lat.toFixed(5) + ", " + p.lon.toFixed(5));
+    meta.textContent = bits.join("  ·  ");
+    if (p.lat != null && p.lon != null) {
+      const a = document.createElement("a");
+      a.href = "https://www.openstreetmap.org/?mlat=" + p.lat + "&mlon=" + p.lon + "#map=15/" + p.lat + "/" + p.lon;
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.className = "map-link";
+      a.textContent = " ↗ map";
+      meta.appendChild(a);
+    }
     document.getElementById("lightbox-edit").onclick = () => {
       document.getElementById("meta-path").value = p.path;
       lightbox.hidden = true;
@@ -309,6 +324,57 @@
     clearTimeout(libTimer);
     libTimer = setTimeout(libSearch, 250);
   }
+  // Map view
+  let map = null, geoLayer = null, geoLoaded = false;
+  function showView(which) {
+    const grid = which === "grid";
+    document.getElementById("lib-grid").hidden = !grid;
+    document.getElementById("lib-map").hidden = grid;
+    document.getElementById("view-grid").classList.toggle("is-active", grid);
+    document.getElementById("view-map").classList.toggle("is-active", !grid);
+    if (!grid) initMap();
+  }
+  function initMap() {
+    if (typeof L === "undefined") { libCount.textContent = "map library unavailable (no internet?)"; return; }
+    if (!map) {
+      map = L.map("lib-map").setView([20, 0], 2);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap", maxZoom: 19,
+      }).addTo(map);
+      geoLayer = L.layerGroup().addTo(map);
+    }
+    setTimeout(() => map.invalidateSize(), 60);
+    if (!geoLoaded) { geoLoaded = true; loadGeo(); }
+  }
+  async function loadGeo() {
+    if (!map) return;
+    try {
+      const res = await fetch("/api/geo");
+      if (!res.ok) return;
+      const data = await res.json();
+      geoLayer.clearLayers();
+      const pts = [];
+      (data.photos || []).forEach((p) => {
+        if (p.lat == null || p.lon == null) return;
+        const m = L.marker([p.lat, p.lon]).addTo(geoLayer);
+        const pop = document.createElement("div");
+        pop.className = "map-pop";
+        const img = document.createElement("img");
+        img.src = "/api/thumb?path=" + encodeURIComponent(p.path);
+        const cap = document.createElement("div");
+        cap.textContent = p.caption || p.filename;
+        pop.append(img, cap);
+        pop.addEventListener("click", () => openLightbox(p));
+        m.bindPopup(pop);
+        pts.push([p.lat, p.lon]);
+      });
+      if (pts.length) map.fitBounds(pts, { padding: [30, 30], maxZoom: 14 });
+      libCount.textContent = pts.length + " geotagged photo" + (pts.length === 1 ? "" : "s");
+    } catch (e) {}
+  }
+  document.getElementById("view-grid").addEventListener("click", () => showView("grid"));
+  document.getElementById("view-map").addEventListener("click", () => showView("map"));
+
   document.getElementById("lib-search").addEventListener("click", libSearch);
   document.getElementById("lib-q").addEventListener("input", libSearchDebounced);
   document.getElementById("lib-keyword").addEventListener("input", libSearchDebounced);
@@ -344,7 +410,7 @@
         const evt = JSON.parse(ev.data);
         if (evt.status === "start") { total = evt.total || 0; done = 0; paint(); return; }
         if (evt.status === "done" || evt.status === "error") { done++; paint(); }
-        if (evt.status === "complete") { done = total; paint(); es.close(); libSearch(); }
+        if (evt.status === "complete") { done = total; paint(); es.close(); libSearch(); if (map) loadGeo(); }
       } catch (e) {}
     };
   });
@@ -373,7 +439,7 @@
         const evt = JSON.parse(ev.data);
         if (evt.status === "start") { total = evt.total || 0; done = 0; paint(); return; }
         if (evt.status === "done" || evt.status === "error" || evt.status === "skipped") { done++; paint(); }
-        if (evt.status === "complete") { es.close(); libSearch(); }
+        if (evt.status === "complete") { es.close(); libSearch(); if (map) loadGeo(); }
       } catch (e) {}
     };
   });
@@ -408,7 +474,9 @@
       const s = await res.json();
       document.getElementById("dash-total").textContent = s.total;
       document.getElementById("dash-captioned").textContent = s.captioned;
+      document.getElementById("dash-geotagged").textContent = s.geotagged || 0;
       bars(document.getElementById("dash-keywords"), s.topKeywords || []);
+      bars(document.getElementById("dash-years"), s.years || []);
       bars(document.getElementById("dash-locations"), s.locations || []);
       bars(document.getElementById("dash-bylines"), s.bylines || []);
     } catch (e) {}
