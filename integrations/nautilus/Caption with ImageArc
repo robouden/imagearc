@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# ImageArc — caption the selected photos/folders and write IPTC/XMP keywords,
+# so Shotwell (and Lightroom, digiKam, darktable…) can read them as tags.
+#
+# Install: copy this file into your file manager's scripts folder and mark it
+# executable — see integrations/install-nautilus.sh, or:
+#   Nautilus/GNOME Files: ~/.local/share/nautilus/scripts/
+#   Nemo (Cinnamon):      ~/.local/share/nemo/scripts/
+#   Caja (MATE):          ~/.config/caja/scripts/
+#
+# Optional overrides (else ImageArc uses ~/.config/imagearc/config.json):
+#   IMAGEARC_MODEL=qwen3-vl  IMAGEARC_PROVIDER=ollama  IMAGEARC_BIN=/path/to/imagearc
+set -u
+
+MODEL="${IMAGEARC_MODEL:-}"
+PROVIDER="${IMAGEARC_PROVIDER:-}"
+BIN="${IMAGEARC_BIN:-imagearc}"
+
+# Selection, from whichever file manager invoked us.
+sel="${NAUTILUS_SCRIPT_SELECTED_FILE_PATHS:-${NEMO_SCRIPT_SELECTED_FILE_PATHS:-${CAJA_SCRIPT_SELECTED_FILE_PATHS:-}}}"
+
+notify() { if command -v notify-send >/dev/null 2>&1; then notify-send "ImageArc" "$1"; else echo "$1"; fi; }
+
+if ! command -v "$BIN" >/dev/null 2>&1; then
+  notify "imagearc not found on PATH — install it or set IMAGEARC_BIN."
+  exit 1
+fi
+if [ -z "$sel" ]; then
+  notify "Nothing selected."
+  exit 0
+fi
+
+args=()
+[ -n "$MODEL" ]    && args+=(--model "$MODEL")
+[ -n "$PROVIDER" ] && args+=(--provider "$PROVIDER")
+
+log="$(mktemp -t imagearc-XXXXXX.log)"
+notify "Captioning started… (log: $log)"
+
+items=0; errs=0
+while IFS= read -r path; do
+  [ -z "$path" ] && continue
+  rec=()
+  [ -d "$path" ] && rec=(--recurse)
+  items=$((items+1))
+  "$BIN" caption "${args[@]}" "${rec[@]}" "$path" >>"$log" 2>&1 || errs=$((errs+1))
+done <<< "$sel"
+
+if [ "$errs" -eq 0 ]; then
+  notify "Done — captioned $items item(s). Re-import the folder in Shotwell to pull in the new tags."
+else
+  notify "Finished with $errs error(s) of $items item(s). See $log"
+fi

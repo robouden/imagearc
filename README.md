@@ -125,6 +125,14 @@ via ExifTool — the original RAW file is never touched. For JPEG/TIFF, ExifTool
 writes in place with `-overwrite_original` (a backup is skipped since nothing
 but metadata changes, and the pixel data is untouched by ExifTool tag writes).
 
+## Use with Shotwell / other photo managers
+
+ImageArc writes standard IPTC/XMP, so photo managers that read embedded
+metadata (Shotwell, digiKam, Lightroom, darktable) pick up the AI captions and
+keywords as tags — no plugin needed. A right-click **"Caption with ImageArc"**
+action for GNOME Files/Nemo/Caja and the Shotwell workflow are in
+[integrations/](integrations/README.md).
+
 ## No lock-in
 
 - Catalogs are plain CSV.
