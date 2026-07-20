@@ -19,8 +19,8 @@ nautilus -q                                    # restart the file manager
 ```
 
 Then select photos or a folder → **right-click → Scripts → Caption with
-ImageArc**. A notification reports progress; captions/keywords are written into
-the files.
+ImageArc**. A terminal window opens showing live per-file progress; captions and
+keywords are written into the files, and a notification fires when it finishes.
 
 Override the model/provider per your setup (otherwise the defaults in
 `~/.config/imagearc/config.json` are used):

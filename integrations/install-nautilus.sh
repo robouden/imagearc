@@ -14,6 +14,12 @@ esac
 
 mkdir -p "$dest"
 install -m 755 "$src" "$dest/Caption with ImageArc"
+
+case "${1:-nautilus}" in
+  nemo) quit="nemo -q" ;;
+  caja) quit="caja -q" ;;
+  *)    quit="nautilus -q" ;;
+esac
 echo "Installed to: $dest"
-echo "Restart the file manager (e.g. 'nautilus -q'), then right-click photos/folders"
+echo "Restart the file manager ('$quit'), then right-click photos/folders"
 echo "→ Scripts → Caption with ImageArc."

@@ -2,10 +2,10 @@
 # ImageArc — caption the selected photos/folders and write IPTC/XMP keywords,
 # so Shotwell (and Lightroom, digiKam, darktable…) can read them as tags.
 #
-# Install: copy this file into your file manager's scripts folder and mark it
-# executable — see integrations/install-nautilus.sh, or:
+# Opens a terminal window showing live progress. Install with
+# integrations/install-nautilus.sh, or copy into your file manager's scripts dir:
 #   Nautilus/GNOME Files: ~/.local/share/nautilus/scripts/
-#   Nemo (Cinnamon):      ~/.local/share/nemo/scripts/
+#   Nemo (Cinnamon/Mint): ~/.local/share/nemo/scripts/
 #   Caja (MATE):          ~/.config/caja/scripts/
 #
 # Optional overrides (else ImageArc uses ~/.config/imagearc/config.json):
@@ -16,7 +16,6 @@ MODEL="${IMAGEARC_MODEL:-}"
 PROVIDER="${IMAGEARC_PROVIDER:-}"
 BIN="${IMAGEARC_BIN:-imagearc}"
 
-# Selection, from whichever file manager invoked us.
 sel="${NAUTILUS_SCRIPT_SELECTED_FILE_PATHS:-${NEMO_SCRIPT_SELECTED_FILE_PATHS:-${CAJA_SCRIPT_SELECTED_FILE_PATHS:-}}}"
 
 notify() { if command -v notify-send >/dev/null 2>&1; then notify-send "ImageArc" "$1"; else echo "$1"; fi; }
@@ -25,29 +24,57 @@ if ! command -v "$BIN" >/dev/null 2>&1; then
   notify "imagearc not found on PATH — install it or set IMAGEARC_BIN."
   exit 1
 fi
-if [ -z "$sel" ]; then
-  notify "Nothing selected."
-  exit 0
-fi
+[ -n "$sel" ] || { notify "Nothing selected."; exit 0; }
 
 args=()
 [ -n "$MODEL" ]    && args+=(--model "$MODEL")
 [ -n "$PROVIDER" ] && args+=(--provider "$PROVIDER")
 
-log="$(mktemp -t imagearc-XXXXXX.log)"
-notify "Captioning started… (log: $log)"
-
-items=0; errs=0
-while IFS= read -r path; do
-  [ -z "$path" ] && continue
-  rec=()
-  [ -d "$path" ] && rec=(--recurse)
-  items=$((items+1))
-  "$BIN" caption "${args[@]}" "${rec[@]}" "$path" >>"$log" 2>&1 || errs=$((errs+1))
-done <<< "$sel"
-
+# Build a self-contained runner with the selection + args baked in (safely
+# quoted), so we don't fight terminal argument/quoting rules.
+runner="$(mktemp -t imagearc-run-XXXXXX.sh)"
+{
+  printf '#!/usr/bin/env bash\nset -u\n'
+  printf 'BIN=%q\n' "$BIN"
+  printf 'ARGS=('; for a in "${args[@]}"; do printf '%q ' "$a"; done; printf ')\n'
+  printf 'SEL=('; while IFS= read -r p; do [ -n "$p" ] && printf '%q ' "$p"; done <<< "$sel"; printf ')\n'
+  cat <<'EOS'
+errs=0; n=${#SEL[@]}; i=0
+echo "ImageArc — captioning $n item(s). Close this window to stop."
+for p in "${SEL[@]}"; do
+  i=$((i+1)); rec=(); [ -d "$p" ] && rec=(--recurse)
+  echo; echo "──[ $i/$n ]────────── $p"
+  "$BIN" caption "${ARGS[@]}" "${rec[@]}" "$p" || errs=$((errs+1))
+done
+echo
 if [ "$errs" -eq 0 ]; then
-  notify "Done — captioned $items item(s). Re-import the folder in Shotwell to pull in the new tags."
+  echo "✓ Done. In Shotwell: Preferences → write metadata to files, then re-import to see tags."
 else
-  notify "Finished with $errs error(s) of $items item(s). See $log"
+  echo "✗ Finished with $errs error(s) above."
+fi
+command -v notify-send >/dev/null 2>&1 && notify-send "ImageArc" "Captioning finished ($errs error(s))."
+# Pause so the window stays open in a terminal; no-op when run headless (no tty).
+read -n1 -rsp "Press any key to close… " _ 2>/dev/null || true
+echo
+rm -f -- "$0"
+EOS
+} > "$runner"
+chmod +x "$runner"
+
+# Open a terminal so progress is visible; fall back to headless + notifications.
+if command -v gnome-terminal >/dev/null 2>&1; then
+  gnome-terminal --title="ImageArc" -- bash "$runner"
+elif command -v konsole >/dev/null 2>&1; then
+  konsole -e bash "$runner"
+elif command -v xfce4-terminal >/dev/null 2>&1; then
+  xfce4-terminal -x bash "$runner"
+elif command -v mate-terminal >/dev/null 2>&1; then
+  mate-terminal -e "bash '$runner'"
+elif command -v xterm >/dev/null 2>&1; then
+  xterm -e bash "$runner"
+elif command -v x-terminal-emulator >/dev/null 2>&1; then
+  x-terminal-emulator -e bash "$runner"
+else
+  notify "Captioning started (no terminal found; running in background)…"
+  bash "$runner"
 fi
