@@ -8,18 +8,27 @@
 </head>
 <body>
 <header class="topbar">
-  <h1>Foto<span>Arch</span></h1>
-  <p class="tagline">AI captioning &amp; IPTC/XMP metadata for photographers</p>
+  <div class="brand">
+    <span class="mark">◈</span>
+    <span class="name">Image<b>Arc</b></span>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button class="tab is-active" data-tab="caption" role="tab">Caption</button>
+    <button class="tab" data-tab="metadata" role="tab">Metadata</button>
+    <button class="tab" data-tab="catalog" role="tab">Catalog</button>
+  </nav>
 </header>
 
-<main class="layout">
-  <section class="card">
-    <h2>Batch caption</h2>
-    <label>Folder path
+<main class="stage">
+  <!-- Caption -->
+  <section class="panel is-active" data-panel="caption">
+    <div class="field">
+      <label for="folder">Folder</label>
       <input id="folder" type="text" placeholder="/path/to/photos">
-    </label>
-    <div class="row">
-      <label>Provider
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label for="provider">Provider</label>
         <select id="provider">
           <option value="ollama">ollama</option>
           <option value="anthropic">anthropic</option>
@@ -27,62 +36,78 @@
           <option value="gemini">gemini</option>
           <option value="openai-compatible">openai-compatible</option>
         </select>
-      </label>
-      <label>Model
+      </div>
+      <div class="field">
+        <label for="model">Model</label>
         <input id="model" type="text" value="llava">
-      </label>
+      </div>
     </div>
-    <div class="row">
-      <label class="checkbox"><input id="recurse" type="checkbox" checked> Recurse subfolders</label>
-      <label class="checkbox"><input id="dryrun" type="checkbox"> Dry run</label>
+    <div class="toggles">
+      <label class="check"><input id="recurse" type="checkbox" checked><span>Recurse subfolders</span></label>
+      <label class="check"><input id="dryrun" type="checkbox"><span>Dry run</span></label>
     </div>
-    <button id="start" class="btn-primary">Start batch</button>
-
-    <h3>Activity</h3>
-    <div id="log" class="log"></div>
+    <button id="start" class="btn">Start batch</button>
+    <div id="log" class="log" aria-live="polite"></div>
   </section>
 
-  <section class="card">
-    <h2>Metadata editor</h2>
-    <label>File path
-      <input id="meta-path" type="text" placeholder="/path/to/photo.jpg">
-      <button id="meta-load" class="btn-secondary">Load</button>
-    </label>
-    <label>Caption
-      <textarea id="meta-caption" rows="3"></textarea>
-    </label>
-    <label>Keywords (comma-separated)
-      <input id="meta-keywords" type="text">
-    </label>
-    <div class="row">
-      <label>Byline
-        <input id="meta-byline" type="text">
-      </label>
-      <label>Location
-        <input id="meta-location" type="text">
-      </label>
+  <!-- Metadata -->
+  <section class="panel" data-panel="metadata">
+    <div class="field with-action">
+      <label for="meta-path">File</label>
+      <div class="inline">
+        <input id="meta-path" type="text" placeholder="/path/to/photo.jpg">
+        <button id="meta-load" class="btn ghost">Load</button>
+      </div>
     </div>
-    <button id="meta-save" class="btn-primary">Save metadata</button>
+    <div class="field">
+      <label for="meta-caption">Caption</label>
+      <textarea id="meta-caption" rows="3"></textarea>
+    </div>
+    <div class="field">
+      <label for="meta-keywords">Keywords <em>comma-separated</em></label>
+      <input id="meta-keywords" type="text">
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label for="meta-byline">Byline</label>
+        <input id="meta-byline" type="text">
+      </div>
+      <div class="field">
+        <label for="meta-location">Location</label>
+        <input id="meta-location" type="text">
+      </div>
+    </div>
+    <button id="meta-save" class="btn">Save metadata</button>
     <p id="meta-status" class="status"></p>
   </section>
 
-  <section class="card">
-    <h2>Catalog</h2>
-    <label>Folder path
+  <!-- Catalog -->
+  <section class="panel" data-panel="catalog">
+    <div class="field">
+      <label for="cat-folder">Folder</label>
       <input id="cat-folder" type="text" placeholder="/path/to/photos">
-    </label>
-    <label>Output CSV
+    </div>
+    <div class="field">
+      <label for="cat-output">Output CSV</label>
       <input id="cat-output" type="text" value="catalog.csv">
-    </label>
-    <button id="cat-build" class="btn-primary">Build catalog</button>
+    </div>
+    <button id="cat-build" class="btn">Build catalog</button>
     <p id="cat-status" class="status"></p>
   </section>
 </main>
 
-<footer>
-  <p>ImageArc &mdash; non-destructive, no lock-in. MIT licensed.</p>
-</footer>
+<footer>Non-destructive · no lock-in · MIT licensed</footer>
 
+<script>
+  document.querySelectorAll(".tab").forEach((t) => {
+    t.addEventListener("click", () => {
+      const id = t.dataset.tab;
+      document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("is-active", x === t));
+      document.querySelectorAll(".panel").forEach((p) =>
+        p.classList.toggle("is-active", p.dataset.panel === id));
+    });
+  });
+</script>
 <script src="/app.js"></script>
 </body>
 </html>
