@@ -136,7 +136,7 @@ but metadata changes, and the pixel data is untouched by ExifTool tag writes).
 
 Mirrored on both forges — clone from whichever you prefer:
 
-- Codeberg: https://codeberg.org/robouden/fotoarch
+- Codeberg: https://codeberg.org/YR-Design/fotoarch
 - GitHub: https://github.com/robouden/fotoarch
 
 ## License
