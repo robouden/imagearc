@@ -18,10 +18,24 @@ import (
 
 	"golang.org/x/image/draw"
 
+	"github.com/robouden/imagearc/internal/geocode"
 	"github.com/robouden/imagearc/internal/metadata"
 	"github.com/robouden/imagearc/internal/pipeline"
 	"github.com/robouden/imagearc/internal/store"
 )
+
+// photoFromMeta builds an index record, reverse-geocoding a "City, Country"
+// location from GPS when the file has coordinates but no IPTC location text.
+func photoFromMeta(path string, m metadata.Meta) store.Photo {
+	loc := m.Location
+	if loc == "" && m.Lat != nil && m.Lon != nil {
+		loc = geocode.Lookup(*m.Lat, *m.Lon)
+	}
+	return store.Photo{
+		Path: path, Caption: m.Caption, Keywords: strings.Join(m.Keywords, ", "),
+		Byline: m.Byline, Location: loc, Date: m.Date, Lat: m.Lat, Lon: m.Lon,
+	}
+}
 
 const thumbMax = 320 // px, longest edge
 
@@ -119,10 +133,7 @@ func (s *server) reindex(folder string, recurse bool, emit func(streamEvent)) {
 			send(streamEvent{Path: f, Status: "error", Error: err.Error()})
 			continue
 		}
-		s.st.Upsert(store.Photo{
-			Path: f, Caption: m.Caption, Keywords: strings.Join(m.Keywords, ", "),
-			Byline: m.Byline, Location: m.Location, Date: m.Date, Lat: m.Lat, Lon: m.Lon,
-		})
+		s.st.Upsert(photoFromMeta(f, m))
 		send(streamEvent{Path: f, Status: "done", Caption: m.Caption})
 	}
 	if known, err := s.st.PathsUnder(folder); err == nil {
@@ -145,10 +156,7 @@ func (s *server) indexOne(path string) {
 	if err != nil {
 		return
 	}
-	s.st.Upsert(store.Photo{
-		Path: path, Caption: m.Caption, Keywords: strings.Join(m.Keywords, ", "),
-		Byline: m.Byline, Location: m.Location, Date: m.Date, Lat: m.Lat, Lon: m.Lon,
-	})
+	s.st.Upsert(photoFromMeta(path, m))
 }
 
 // rescanSources incrementally re-indexes every remembered source (silent).

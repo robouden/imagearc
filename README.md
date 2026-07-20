@@ -139,6 +139,12 @@ Mirrored on both forges — clone from whichever you prefer:
 - Codeberg: https://codeberg.org/YR-Design/imagearc
 - GitHub: https://github.com/robouden/imagearc
 
+## Credits
+
+Offline reverse geocoding (GPS → city/country) uses the
+[GeoNames](https://www.geonames.org/) `cities15000` dataset, licensed
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+
 ## License
 
 [CC0 1.0 Universal](LICENSE) — public domain dedication. No rights reserved.

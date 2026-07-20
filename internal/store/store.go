@@ -29,7 +29,8 @@ type Photo struct {
 // ReaderVersion is bumped whenever metadata extraction changes, so existing
 // rows are re-read on the next scan even if their mtime is unchanged.
 // v2: added EXIF DateTimeOriginal + GPS lat/lon.
-const ReaderVersion = 2
+// v3: offline reverse-geocoded "City, Country" location from GPS.
+const ReaderVersion = 3
 
 // Store wraps the SQLite database.
 type Store struct{ db *sql.DB }
