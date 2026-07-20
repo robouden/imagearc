@@ -20,8 +20,15 @@ sel="${NAUTILUS_SCRIPT_SELECTED_FILE_PATHS:-${NEMO_SCRIPT_SELECTED_FILE_PATHS:-$
 
 notify() { if command -v notify-send >/dev/null 2>&1; then notify-send "ImageArc" "$1"; else echo "$1"; fi; }
 
+# GUI-launched scripts don't read your interactive shell PATH, so fall back to
+# common install locations (e.g. `go install` puts it in ~/go/bin).
 if ! command -v "$BIN" >/dev/null 2>&1; then
-  notify "imagearc not found on PATH — install it or set IMAGEARC_BIN."
+  for cand in "$HOME/go/bin/imagearc" "/usr/local/bin/imagearc" "/usr/bin/imagearc"; do
+    [ -x "$cand" ] && { BIN="$cand"; break; }
+  done
+fi
+if ! command -v "$BIN" >/dev/null 2>&1 && [ ! -x "$BIN" ]; then
+  notify "imagearc not found — install it (go install ./cmd/imagearc) or set IMAGEARC_BIN."
   exit 1
 fi
 [ -n "$sel" ] || { notify "Nothing selected."; exit 0; }
