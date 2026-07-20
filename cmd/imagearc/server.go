@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -80,6 +82,87 @@ func (s *server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/stream", s.handleStream)
 	mux.HandleFunc("/api/metadata", s.handleMetadata)
 	mux.HandleFunc("/api/catalog", s.handleCatalog)
+	mux.HandleFunc("/api/browse", s.handleBrowse)
+	mux.HandleFunc("/api/models", s.handleModels)
+}
+
+type browseResponse struct {
+	Path   string   `json:"path"`   // absolute, cleaned
+	Parent string   `json:"parent"` // "" when at filesystem root
+	Dirs   []string `json:"dirs"`   // subdirectory names, sorted
+}
+
+// handleBrowse lists subdirectories of a server-side path for the folder picker.
+func (s *server) handleBrowse(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			path = home
+		} else {
+			path = "/"
+		}
+	}
+	path = filepath.Clean(path)
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	dirs := []string{}
+	for _, e := range entries {
+		if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
+			dirs = append(dirs, e.Name())
+		}
+	}
+	sort.Strings(dirs)
+	parent := filepath.Dir(path)
+	if parent == path {
+		parent = ""
+	}
+	json.NewEncoder(w).Encode(browseResponse{Path: path, Parent: parent, Dirs: dirs})
+}
+
+// knownModels lists suggested models for providers that have no live listing API.
+var knownModels = map[string][]string{
+	"anthropic":         {"claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5-20251001"},
+	"openai":            {"gpt-4o", "gpt-4o-mini", "gpt-4.1"},
+	"gemini":            {"gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"},
+	"openai-compatible": {},
+}
+
+// handleModels returns available models for a provider. For ollama it queries the
+// local daemon's /api/tags; other providers return a curated suggestion list.
+func (s *server) handleModels(w http.ResponseWriter, r *http.Request) {
+	provider := r.URL.Query().Get("provider")
+	if provider != "ollama" {
+		json.NewEncoder(w).Encode(map[string]any{"models": knownModels[provider]})
+		return
+	}
+	cfg, _ := config.Load()
+	host := strings.TrimRight(cfg.OllamaHost, "/")
+	if host == "" {
+		host = "http://localhost:11434"
+	}
+	resp, err := http.Get(host + "/api/tags")
+	if err != nil {
+		http.Error(w, "cannot reach Ollama at "+host+" (is it running?)", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	var tags struct {
+		Models []struct {
+			Name string `json:"name"`
+		} `json:"models"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tags); err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	models := []string{}
+	for _, m := range tags.Models {
+		models = append(models, m.Name)
+	}
+	json.NewEncoder(w).Encode(map[string]any{"models": models})
 }
 
 type captionRequest struct {

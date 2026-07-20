@@ -116,6 +116,80 @@
     }
   });
 
+  // --- Model list (populate datalist from provider) ---
+  const modelList = document.getElementById("model-list");
+  const providerSel = document.getElementById("provider");
+  async function loadModels() {
+    if (!modelList) return;
+    try {
+      const res = await fetch("/api/models?provider=" + encodeURIComponent(providerSel.value));
+      const data = res.ok ? await res.json() : { models: [] };
+      modelList.innerHTML = "";
+      (data.models || []).forEach((m) => {
+        const opt = document.createElement("option");
+        opt.value = m;
+        modelList.appendChild(opt);
+      });
+    } catch (e) {
+      modelList.innerHTML = "";
+    }
+  }
+  providerSel.addEventListener("change", loadModels);
+  loadModels();
+
+  // --- Folder picker ---
+  const picker = document.getElementById("picker");
+  const pickerList = document.getElementById("picker-list");
+  const pickerPath = document.getElementById("picker-path");
+  let pickerTarget = null; // input id to fill
+  let pickerCur = "";      // current directory
+
+  async function pickerOpen(targetId) {
+    pickerTarget = targetId;
+    const seed = document.getElementById(targetId).value || "";
+    picker.hidden = false;
+    await pickerLoad(seed);
+  }
+
+  async function pickerLoad(path) {
+    try {
+      const res = await fetch("/api/browse?path=" + encodeURIComponent(path || ""));
+      if (!res.ok) { pickerPath.textContent = "cannot open: " + (await res.text()); return; }
+      const data = await res.json();
+      pickerCur = data.path;
+      pickerPath.textContent = data.path;
+      pickerList.innerHTML = "";
+      if (!data.dirs.length) {
+        const li = document.createElement("li");
+        li.className = "empty";
+        li.textContent = "no subfolders";
+        pickerList.appendChild(li);
+      }
+      data.dirs.forEach((name) => {
+        const li = document.createElement("li");
+        li.textContent = "📁 " + name;
+        li.addEventListener("click", () => pickerLoad(data.path.replace(/\/$/, "") + "/" + name));
+        pickerList.appendChild(li);
+      });
+      document.getElementById("picker-up").dataset.parent = data.parent || "";
+    } catch (e) {
+      pickerPath.textContent = "error: " + e;
+    }
+  }
+
+  document.querySelectorAll("[data-browse]").forEach((b) =>
+    b.addEventListener("click", () => pickerOpen(b.dataset.browse)));
+  document.getElementById("picker-up").addEventListener("click", (e) => {
+    const parent = e.currentTarget.dataset.parent;
+    if (parent) pickerLoad(parent);
+  });
+  document.getElementById("picker-close").addEventListener("click", () => (picker.hidden = true));
+  picker.addEventListener("click", (e) => { if (e.target === picker) picker.hidden = true; });
+  document.getElementById("picker-pick").addEventListener("click", () => {
+    if (pickerTarget) document.getElementById(pickerTarget).value = pickerCur;
+    picker.hidden = true;
+  });
+
   // --- Catalog ---
   document.getElementById("cat-build").addEventListener("click", async () => {
     const statusEl = document.getElementById("cat-status");
