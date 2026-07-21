@@ -1,0 +1,9 @@
+<ide_opened_file>The user opened the file /home/rob/Documents/Open source fotoapp/README.md in the IDE. This may or may not be related to the current task.</ide_opened_file>
+Can you add this to the readme.md?
+
+
+Concept that was years in my mind and  discussed with other photographers like Paul Disario and Michael Goldberg for many years, and finally got woken up/initialized by the app from Peter Blakely (FotoArch/MetaEdit) that was Mac based only
+
+---
+
+Can yuo add a lin to Peter his project?
