@@ -147,6 +147,14 @@ Mirrored on both forges — clone from whichever you prefer:
 - Codeberg: https://codeberg.org/YR-Design/imagearc
 - GitHub: https://github.com/robouden/imagearc
 
+## Origin
+
+The concept behind ImageArc lived in my mind for years, discussed at length with
+fellow photographers like Paul Disario and Michael Goldberg. It was finally
+woken up and set in motion by Peter Blakely's Mac-only [FotoArch/MetaEdit](https://fotoarch.app/#beta) —
+ImageArc grew out of the wish for a free, open-source, cross-platform take on
+that idea.
+
 ## Credits
 
 Offline reverse geocoding (GPS → city/country) uses the
